@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Cosmic Dodge Pro - Devil Birds Attack</title>
+    <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #050505; 
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at center, #1b2735 0%, #090a0f 100%);
+            cursor: none;
+            overflow: hidden;
+        }
+
+        #player {
+            position: absolute;
+            width: 30px;
+            height: 40px;
+            background: #00d2ff;
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+            box-shadow: 0 0 20px #00d2ff, 0 0 5px rgba(0,210,255,0.5);
+            pointer-events: none;
+            z-index: 5;
+            transition: filter 0.05s linear;
+        }
+
+        .asteroid {
+            position: absolute;
+            background: radial-gradient(circle at 30% 30%, #ff6b4a, #c41e1e);
+            border-radius: 50%;
+            box-shadow: 0 0 15px #ff416c;
+            pointer-events: none;
+        }
+
+        /* Devil Bird Styling - evil, fast, angular */
+        .devil-bird {
+            position: absolute;
+            width: 32px;
+            height: 28px;
+            background: #9b1d2c;
+            clip-path: polygon(0% 35%, 30% 20%, 50% 0%, 70% 20%, 100% 35%, 85% 55%, 100% 80%, 75% 70%, 50% 100%, 25% 70%, 0% 80%, 15% 55%);
+            box-shadow: 0 0 12px #ff0040, 0 0 4px #ff6600;
+            pointer-events: none;
+            filter: drop-shadow(0 0 4px red);
+            animation: birdGlow 0.3s infinite alternate;
+            z-index: 4;
+        }
+
+        @keyframes birdGlow {
+            0% { filter: drop-shadow(0 0 2px #ff3300); }
+            100% { filter: drop-shadow(0 0 10px #ff0066); }
+        }
+
+        /* Screen shake utility */
+        .shake-effect {
+            animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        }
+
+        @keyframes shake {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            20% { transform: translate(-5px, 2px) rotate(-1deg); }
+            40% { transform: translate(5px, -3px) rotate(1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            80% { transform: translate(4px, -1px) rotate(0.5deg); }
+            100% { transform: translate(0, 0) rotate(0); }
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00d2ff;
+            z-index: 10;
+            font-weight: bold;
+            text-shadow: 0 0 8px #00000080;
+            pointer-events: none;
+        }
+
+        #score-box { 
+            font-size: 1.6rem; 
+            text-shadow: 0 0 10px #00d2ff;
+            background: rgba(0,0,0,0.5);
+            padding: 6px 14px;
+            border-radius: 12px;
+            backdrop-filter: blur(4px);
+            border-left: 3px solid #00d2ff;
+        }
+
+        #high-score-wrap { font-size: 0.9rem; color: #e0e0e0; margin-top: 5px; }
+
+        #overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.88);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(6px);
+            transition: all 0.2s;
+        }
+
+        #modal {
+            text-align: center;
+            color: white;
+            padding: 35px 45px;
+            border: 2px solid #00d2ff;
+            border-radius: 28px;
+            background: rgba(0, 30, 40, 0.7);
+            box-shadow: 0 0 40px rgba(0,210,255,0.3);
+            max-width: 85%;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            letter-spacing: 4px;
+            margin-top: 0;
+            text-shadow: 0 0 12px cyan;
+        }
+
+        #instructions {
+            font-size: 0.9rem;
+            background: #0a0f1f;
+            padding: 10px;
+            border-radius: 20px;
+        }
+
+        #start-btn {
+            padding: 14px 36px;
+            font-size: 1.2rem;
+            background: #00d2ff;
+            border: none;
+            color: #0a0a0a;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 20px;
+            border-radius: 40px;
+            transition: 0.1s linear;
+            font-family: monospace;
+        }
+
+        #start-btn:hover { background: #ffffff; box-shadow: 0 0 28px #00d2ff; transform: scale(1.02); }
+
+        /* particle effect for collision (mini visual) */
+        .collision-particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #ffaa44;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 20;
+            filter: blur(1px);
+        }
+
+        @media (max-width: 600px) {
+            #player { width: 24px; height: 32px; }
+            .devil-bird { width: 28px; height: 24px; }
+            .asteroid { min-width: 18px; }
+        }
+    </style>
+</head>
+<body>
+<div id="game-container">
+    <div id="ui">
+        <div id="score-box">
+            <div>🌀 SCORE: <span id="score">0</span></div>
+            <div id="high-score-wrap">🏆 BEST: <span id="high-score">0</span></div>
+        </div>
+        <div style="font-size: 0.75rem; margin-top: 8px; opacity:0.7;">⚠️ ASTEROIDS + DEVIL BIRDS ⚡</div>
+    </div>
+    <div id="overlay">
+        <div id="modal">
+            <h1 id="title">☠️ COSMIC DODGE ☠️</h1>
+            <p id="instructions">
+                🖱️ <b>Mouse</b> moves your ship (bottom center).<br>
+                🔴 <span style="color:#ff4b2b;">Asteroids</span> fall slowly → deadly.<br>
+                🦇 <span style="color:#ff6666; text-shadow:0 0 3px red;">DEVIL BIRDS</span> rush HORIZONTALLY & DIAGONAL!<br>
+                ✨ Survive as long as you can!
+            </p>
+            <button id="start-btn">⚡ LAUNCH MISSION ⚡</button>
+        </div>
+    </div>
+    <div id="player"></div>
+</div>
+
+<script>
+    (function() {
+        // ----- DOM Elements -----
+        const container = document.getElementById('game-container');
+        const player = document.getElementById('player');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('high-score');
+        const overlay = document.getElementById('overlay');
+        const startBtn = document.getElementById('start-btn');
+        const titleEl = document.getElementById('title');
+
+        // ----- Game State -----
+        let score = 0;
+        let highScore = localStorage.getItem('highScore') || 0;
+        let gameActive = false;
+        let animationId = null;
+        let mouseX = window.innerWidth / 2;
+        
+        // ----- Entity pools -----
+        let asteroids = [];      // { el, x, y, size, speed }
+        let devilBirds = [];    // { el, x, y, width, height, speedX, speedY, direction }
+
+        // ----- Spawn timers (frame counters) -----
+        let asteroidSpawnDelay = 0;
+        let birdSpawnDelay = 0;
+        
+        // Base speeds and dynamic difficulty
+        let baseAsteroidSpeed = 2.8;
+        let baseBirdSpeed = 5.2;
+        
+        // Visual FX flag for collision flash
+        let screenShakeTimer = 0;
+        
+        // Set Highscore display
+        highScoreEl.innerText = highScore;
+
+        // ----- Audio Setup (simple beeps) -----
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(freq, type, duration, volume = 0.12) {
+            if (!audioCtx || audioCtx.state !== 'running') return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+        
+        // Explosion / hit sound variant
+        function playCrunchSound() {
+            playSound(180, 'sawtooth', 0.28, 0.15);
+            setTimeout(() => playSound(90, 'triangle', 0.3, 0.1), 30);
+        }
+        
+        function playBirdScreech() {
+            playSound(780, 'square', 0.18, 0.1);
+            playSound(900, 'sine', 0.12, 0.08);
+        }
+        
+        // ----- Visual fx: screen shake (short burst) -----
+        function addScreenShake() {
+            if (!gameActive) return;
+            container.classList.add('shake-effect');
+            setTimeout(() => {
+                container.classList.remove('shake-effect');
+            }, 400);
+        }
+        
+        // ----- Particle burst effect (tiny debris) -----
+        function spawnCollisionSpark(x, y) {
+            for (let i = 0; i < 8; i++) {
+                const part = document.createElement('div');
+                part.className = 'collision-particle';
+                part.style.left = (x + (Math.random() - 0.5) * 20) + 'px';
+                part.style.top = (y + (Math.random() - 0.5) * 20) + 'px';
+                part.style.background = `hsl(${Math.random() * 40 + 20}, 100%, 65%)`;
+                container.appendChild(part);
+                setTimeout(() => part.remove(), 180);
+            }
+        }
+        
+        // ----- Create Asteroid (rocks) -----
+        function createAsteroid() {
+            const el = document.createElement('div');
+            el.classList.add('asteroid');
+            const size = Math.random() * 38 + 18; // 18-56px
+            el.style.width = size + 'px';
+            el.style.height = size + 'px';
+            const x = Math.random() * (window.innerWidth - size);
+            el.style.left = '0px';
+            el.style.top = '0px';
+            container.appendChild(el);
+            
+            // dynamic speed scaling based on score (difficulty rise)
+            let speedBonus = Math.min(4.5, Math.floor(score / 600));
+            let finalSpeed = baseAsteroidSpeed + (score / 400) + speedBonus;
+            finalSpeed = Math.min(finalSpeed, 8.2);
+            
+            asteroids.push({
+                el: el,
+                x: x,
+                y: -size,
+                size: size,
+                speed: finalSpeed
+            });
+        }
+        
+        // ----- Create Devil Bird (fast erratic opponents) -----
+        // Birds can come from LEFT -> RIGHT, RIGHT -> LEFT, or diagonal swoops.
+        // Also random Y position (mid or upper area)
+        function createDevilBird() {
+            const el = document.createElement('div');
+            el.classList.add('devil-bird');
+            const birdWidth = 32;
+            const birdHeight = 28;
+            el.style.width = birdWidth + 'px';
+            el.style.height = birdHeight + 'px';
+            
+            // Choose spawn edge: left, right, or top? For devilish behaviour: mostly horizontal with slight vertical.
+            const edge = Math.floor(Math.random() * 3); // 0: left, 1: right, 2: top-left to bottom-right angled
+            
+            let startX, startY, speedX, speedY;
+            const baseBirdSpeedVal = Math.min(7.5, baseBirdSpeed + (score / 350));
+            const variant = 1.2 + Math.random() * 1.5;
+            
+            if (edge === 0) { // from left edge
+                startX = -birdWidth;
+                startY = Math.random() * (window.innerHeight * 0.7) + 50;
+                speedX = baseBirdSpeedVal * variant;
+                speedY = (Math.random() - 0.5) * 2.2; // slight drift
+            } 
+            else if (edge === 1) { // from right edge
+                startX = window.innerWidth;
+                startY = Math.random() * (window.innerHeight * 0.7) + 50;
+                speedX = -(baseBirdSpeedVal * variant);
+                speedY = (Math.random() - 0.5) * 2.2;
+            } 
+            else { // swoop from top corners with diagonal menace
+                const fromLeftSide = Math.random() > 0.5;
+                startX = fromLeftSide ? -birdWidth : window.innerWidth;
+                startY = -birdHeight - Math.random() * 40;
+                speedX = (fromLeftSide ? baseBirdSpeedVal * 1.1 : -baseBirdSpeedVal * 1.1);
+                speedY = baseBirdSpeedVal * 0.9 + Math.random() * 1.5;
+            }
+            
+            el.style.left = '0px';
+            el.style.top = '0px';
+            container.appendChild(el);
+            
+            devilBirds.push({
+                el: el,
+                x: startX,
+                y: startY,
+                width: birdWidth,
+                height: birdHeight,
+                speedX: speedX,
+                speedY: speedY
+            });
+            
+            // optional screech on spawn (gives warning) but not too frequent
+            if (Math.random() < 0.35 && gameActive) playBirdScreech();
+        }
+        
+        // ----- remove all entities & reset -----
+        function clearAllEntities() {
+            asteroids.forEach(a => a.el.remove());
+            devilBirds.forEach(b => b.el.remove());
+            asteroids = [];
+            devilBirds = [];
+        }
+        
+        // ----- Collision detection between player and any enemy -----
+        function checkCollisions() {
+            const pRect = player.getBoundingClientRect();
+            if (!pRect) return false;
+            
+            // 1. Asteroid collisions
+            for (let i = 0; i < asteroids.length; i++) {
+                const a = asteroids[i];
+                const aRect = a.el.getBoundingClientRect();
+                if (pRect.left < aRect.right && pRect.right > aRect.left &&
+                    pRect.top < aRect.bottom && pRect.bottom > aRect.top) {
+                    // collision with asteroid
+                    spawnCollisionSpark(pRect.left + pRect.width/2, pRect.top + pRect.height/2);
+                    return true;
+                }
+            }
+            
+            // 2. Devil Bird collisions (fast evil birds)
+            for (let i = 0; i < devilBirds.length; i++) {
+                const bird = devilBirds[i];
+                const bRect = bird.el.getBoundingClientRect();
+                if (pRect.left < bRect.right && pRect.right > bRect.left &&
+                    pRect.top < bRect.bottom && pRect.bottom > bRect.top) {
+                    spawnCollisionSpark(pRect.left + pRect.width/2, pRect.top + pRect.height/2);
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // ----- Game Over Handler -----
+        function endGame() {
+            if (!gameActive) return;
+            gameActive = false;
+            if (animationId) cancelAnimationFrame(animationId);
+            
+            playCrunchSound();
+            addScreenShake();
+            
+            // update high score
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('highScore', highScore);
+                highScoreEl.innerText = highScore;
+            }
+            
+            titleEl.innerText = "💀 MISSION FAILED 💀";
+            overlay.style.display = 'flex';
+            startBtn.innerText = "🔥 RETRY MISSION 🔥";
+            
+            // clean all moving objects to avoid overlay glitches
+            clearAllEntities();
+        }
+        
+        // ----- Game Loop (animation and updates)-----
+        let lastTimestamp = 0;
+        
+        function gameLoop() {
+            if (!gameActive) return;
+            
+            // 1. Update player position (instant mouse tracking)
+            let clampedX = Math.min(Math.max(mouseX - 15, 4), window.innerWidth - 30);
+            player.style.left = clampedX + 'px';
+            player.style.bottom = '45px'; // fixed from bottom
+            
+            // 2. Score increment (each frame => approx 60 score per second)
+            score++;
+            scoreEl.innerText = Math.floor(score / 4); // smoother scoring, but visible increase
+            let displayScore = Math.floor(score / 4);
+            scoreEl.innerText = displayScore;
+            
+            // 3. Dynamic Spawning: asteroids & birds based on difficulty curve
+            // Higher score -> more frequent spawns.
+            let asteroidSpawnRate = 0.045 + (Math.floor(displayScore / 300) * 0.01);
+            asteroidSpawnRate = Math.min(asteroidSpawnRate, 0.11);
+            if (Math.random() < asteroidSpawnRate && asteroids.length < 22) createAsteroid();
+            
+            // Devil Bird spawns: starts slow, builds up menace
+            let birdSpawnBase = 0.018 + (Math.floor(displayScore / 280) * 0.007);
+            birdSpawnBase = Math.min(birdSpawnBase, 0.058);
+            if (Math.random() < birdSpawnBase && devilBirds.length < 12) createDevilBird();
+            
+            // 4. Update Asteroids movement + offscreen removal
+            for (let i = asteroids.length-1; i >= 0; i--) {
+                const a = asteroids[i];
+                a.y += a.speed;
+                a.el.style.transform = `translate3d(${a.x}px, ${a.y}px, 0)`;
+                if (a.y > window.innerHeight + 200) {
+                    a.el.remove();
+                    asteroids.splice(i,1);
+                }
+            }
+            
+            // 5. Update Devil Birds with high speed (horizontal/diagonal)
+            for (let i = devilBirds.length-1; i >= 0; i--) {
+                const b = devilBirds[i];
+                b.x += b.speedX;
+                b.y += b.speedY;
+                b.el.style.transform = `translate3d(${b.x}px, ${b.y}px, 0)`;
+                // remove if gone beyond screen far (extra margin)
+                if (b.x + b.width < -200 || b.x > window.innerWidth + 200 || b.y + b.height < -200 || b.y > window.innerHeight + 300) {
+                    b.el.remove();
+                    devilBirds.splice(i,1);
+                }
+            }
+            
+            // 6. Collision Detection (end game if hit)
+            const hasCollision = checkCollisions();
+            if (hasCollision) {
+                endGame();
+                return;
+            }
+            
+            // Continue loop
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        // ----- Reset & Start fresh mission -----
+        function startGame() {
+            if (animationId) cancelAnimationFrame(animationId);
+            clearAllEntities();
+            
+            // reset state variables
+            score = 0;
+            scoreEl.innerText = "0";
+            gameActive = true;
+            asteroids = [];
+            devilBirds = [];
+            
+            // Reset dynamic variables to fresh values
+            baseAsteroidSpeed = 2.8;
+            baseBirdSpeed = 5.0;
+            
+            // set mouse to center start
+            mouseX = window.innerWidth / 2;
+            player.style.left = (mouseX - 15) + 'px';
+            player.style.bottom = '45px';
+            
+            // hide overlay
+            overlay.style.display = 'none';
+            
+            // audio context resume
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(e=>console.log);
+            }
+            playSound(520, 'sine', 0.2, 0.1);
+            
+            // start loop
+            animationId = requestAnimationFrame(gameLoop);
+            
+            // spawn initial waves to make it interesting but not overwhelming
+            setTimeout(() => {
+                if (gameActive) {
+                    for(let i=0; i<2; i++) createAsteroid();
+                    setTimeout(() => { if(gameActive) createDevilBird(); }, 300);
+                }
+            }, 200);
+        }
+        
+        // ----- Event Listeners -----
+        window.addEventListener('mousemove', (e) => {
+            if (!gameActive) return;
+            // boundary limitation for mouse (ship can't go off edge)
+            let newX = e.clientX;
+            newX = Math.min(Math.max(newX, 20), window.innerWidth - 20);
+            mouseX = newX;
+        });
+        
+        // also support touch for mobile? add basic touch move for fun
+        window.addEventListener('touchmove', (e) => {
+            if (!gameActive) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            let newX = touch.clientX;
+            newX = Math.min(Math.max(newX, 20), window.innerWidth - 20);
+            mouseX = newX;
+        }, { passive: false });
+        
+        window.addEventListener('touchstart', (e) => {
+            if (!gameActive && overlay.style.display !== 'none') return;
+            if (!gameActive) return;
+            const touch = e.touches[0];
+            let newX = touch.clientX;
+            newX = Math.min(Math.max(newX, 20), window.innerWidth - 20);
+            mouseX = newX;
+        });
+        
+        startBtn.addEventListener('click', () => {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            startGame();
+        });
+        
+        // initial high score load
+        highScoreEl.innerText = highScore;
+        
+        // optional: resize protection: adjust any stray positions (no active game)
+        window.addEventListener('resize', () => {
+            if (!gameActive) return;
+            // clamp current mouse on resize
+            if (mouseX > window.innerWidth - 20) mouseX = window.innerWidth - 20;
+            if (mouseX < 20) mouseX = 20;
+            player.style.left = (mouseX - 15) + 'px';
+        });
+        
+        // preload assets - set default player pos
+        player.style.bottom = '45px';
+        player.style.left = (window.innerWidth/2 - 15) + 'px';
+        
+        // Show that birds are part of the challenge even in menu
+        console.log("Cosmic Dodge with DEVIL BIRDS ready!");
+    })();
+</script>
+</body>
+</html>
